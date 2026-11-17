@@ -24,6 +24,10 @@ jobs:
   verify:
     name: Nix-Backed Devcontainer (Compose + Podman/Docker)
     runs-on: ubuntu-latest
+    env:
+      # Allow docker compose / buildx bake (v5+) to read @devcontainers/cli's
+      # temporary generated Dockerfile-with-features under /tmp
+      BUILDX_BAKE_ENTITLEMENTS_FS: "0"
     steps:
       - uses: actions/checkout@v4
 
