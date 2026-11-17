@@ -1,0 +1,33 @@
+name: Devcontainer CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - ".devcontainer/**"
+      - "flake.nix"
+      - "flake.lock"
+      - ".env.example"
+      - "scripts/**"
+      - ".github/workflows/devcontainer-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: buildbox-devcontainer-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Nix-Backed Devcontainer (Compose + Podman/Docker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build, start, and verify Nix devcontainer
+        uses: devcontainers/ci@v0.3
+        with:
+          runCmd: BUILDBOX_CHROME_SOFTWARE_GL=1 bash scripts/verify.sh

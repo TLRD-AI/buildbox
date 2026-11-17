@@ -1,0 +1,55 @@
+{
+  "name": "Buildbox (Fedora Atomic + Nix Devcontainer)",
+  "initializeCommand": "bash .devcontainer/init-host.sh",
+  "dockerComposeFile": [
+    "docker-compose.devcontainer.yml",
+    "docker-compose.local.yml"
+  ],
+  "service": "dev",
+  "runServices": [
+    "db",
+    "redis",
+    "dev"
+  ],
+  "workspaceFolder": "/workspace",
+  "remoteUser": "appuser",
+  "updateRemoteUserUID": false,
+  "userEnvProbe": "loginInteractiveShell",
+  "forwardPorts": [
+    5432,
+    6379,
+    8000
+  ],
+  "portsAttributes": {
+    "5432": {
+      "label": "PostgreSQL 16 (Devcontainer)"
+    },
+    "6379": {
+      "label": "Redis 7 (Devcontainer)"
+    },
+    "8000": {
+      "label": "App Dev Server",
+      "onAutoForward": "notify"
+    }
+  },
+  "containerEnv": {
+    "PYTHON_JIT": "1",
+    "PUPPETEER_SKIP_DOWNLOAD": "1",
+    "PUB_CACHE": "/home/appuser/.cache/pub-cache",
+    "BASH_ENV": "/home/appuser/.buildbox-bash-env"
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      },
+      "extensions": [
+        "mkhl.direnv",
+        "jnoortheen.nix-ide",
+        "ms-python.python",
+        "Dart-Code.flutter"
+      ]
+    }
+  }
+}

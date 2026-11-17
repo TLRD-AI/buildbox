@@ -1,0 +1,16 @@
+# Exclude host git metadata, local secrets, and ephemeral caches from container build context
+.git/
+.direnv/
+.local/
+local/
+private/
+.env
+.env.*
+!.env.example
+.devcontainer/docker-compose.local.yml
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+*.log
+.DS_Store

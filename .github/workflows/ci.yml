@@ -1,0 +1,67 @@
+name: Buildbox CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: buildbox-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    name: Secrets, Shell & Compose Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run secret and host-artifact guardrail scan
+        run: bash scripts/check_secrets.sh --all
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends shellcheck
+
+      - name: Verify shell syntax and shellcheck
+        run: |
+          files=(
+            .devcontainer/init-host.sh
+            .devcontainer/post-create.sh
+            host/apply_host_tuning.sh
+            host/bashrc.d/99-buildbox-env.sh
+            scripts/check_secrets.sh
+            scripts/verify.sh
+            scripts/git-hooks/pre-commit
+          )
+          for f in "${files[@]}"; do bash -n "$f"; done
+          shellcheck -S warning "${files[@]}"
+
+      - name: Validate Devcontainer Docker Compose configuration
+        run: docker compose -f .devcontainer/docker-compose.devcontainer.yml config -q
+
+  nix-devshell:
+    name: Nix Flake & devShell (${{ matrix.os }})
+    needs: hygiene
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Evaluate flake outputs
+        run: nix flake show --no-write-lock-file
+
+      - name: Verify Nix devShell toolchain and runtime checks
+        env:
+          BUILDBOX_CHROME_SOFTWARE_GL: "1"
+        run: nix develop -c bash scripts/verify.sh

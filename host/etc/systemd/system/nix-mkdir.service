@@ -1,0 +1,25 @@
+# /etc/systemd/system/nix-mkdir.service
+# Pre-creates the `/nix` mount point on Fedora Atomic's transient root before
+# `nix-directory.service` and `nix.mount` run. Because `ConditionPathExists=!/nix`
+# skips `nix-directory.service` once `/nix` exists, Determinate Nix mounts
+# `/var/home/nix` cleanly at `/nix` without failing on read-only composefs `/`.
+#
+# Enable with:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now nix-mkdir.service
+
+[Unit]
+Description=Create /nix mount point on transient root before nix-directory.service
+DefaultDependencies=no
+ConditionPathExists=!/nix
+Requires=local-fs-pre.target
+After=local-fs-pre.target
+Before=nix-directory.service nix.mount
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/mkdir -p -m 0755 /nix
+
+[Install]
+RequiredBy=nix-directory.service nix.mount

@@ -1,0 +1,77 @@
+# ==============================================================================
+# Buildbox — Exemplar Devcontainer Docker Compose Stack
+# ==============================================================================
+# Paths inside this file resolve relative to `.devcontainer/`.
+# Host-specific overrides (rootless Podman keep-id, SELinux label:disable,
+# oom_score_adj parity, optional NVIDIA CDI) are written by `init-host.sh`
+# into gitignored `.devcontainer/docker-compose.local.yml`.
+# ==============================================================================
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    shm_size: 2gb
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-buildbox}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme-local-dev-only}
+      POSTGRES_DB: ${POSTGRES_DB:-buildbox}
+    volumes:
+      - buildbox-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-buildbox} -d $${POSTGRES_DB:-buildbox}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - buildbox-redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: sleep infinity
+    init: true
+    # Generous /dev/shm prevents Chromium & PostgreSQL parallel worker bus errors
+    shm_size: 2gb
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      PYTHON_JIT: "1"
+      PUPPETEER_SKIP_DOWNLOAD: "1"
+      PUB_CACHE: /home/appuser/.cache/pub-cache
+      DB_HOST: db
+      DB_PORT: "5432"
+      REDIS_URL: redis://redis:6379/1
+    volumes:
+      - ..:/workspace:cached
+      # Named Linux volumes isolate /nix and package caches from host OS ABI & APFS/VirtioFS
+      - buildbox-nix-store:/nix
+      - buildbox-pub-cache:/home/appuser/.cache/pub-cache
+      - buildbox-uv-cache:/home/appuser/.cache/uv
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  buildbox-pgdata:
+  buildbox-redisdata:
+  buildbox-nix-store:
+  buildbox-pub-cache:
+  buildbox-uv-cache:

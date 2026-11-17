@@ -1,0 +1,45 @@
+# Environment & local secret files (never commit real secrets)
+.env
+.env.*
+!.env.example
+*.local.yml
+.devcontainer/docker-compose.local.yml
+
+# Private keys, certificates & credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.priv
+*.crt
+*.cer
+id_rsa*
+id_ed25519*
+id_ecdsa*
+.netrc
+
+# Host-specific OS / network / status snapshots (store in ../buildbox-private)
+ostree-etc-diff.txt
+pre-nix-status.txt
+host-status.txt
+*.nmconnection
+local/
+private/
+.local/
+
+# Nix / direnv / dev artifacts
+.direnv/
+result
+result-*
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+.dart_tool/
+build/
+coverage/
+reports/
+*.sqlite
+*.sqlite3
+*.log
+.DS_Store

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Buildbox — Pre-Commit Secret & Host-Artifact Guardrail Hook
+# ==============================================================================
+# Enable once per clone:
+#   git config core.hooksPath scripts/git-hooks
+# ==============================================================================
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+exec bash "${REPO_ROOT}/scripts/check_secrets.sh" --staged

@@ -1,0 +1,30 @@
+# ==============================================================================
+# Sanitized Example Output of `sudo ostree admin config-diff`
+# ==============================================================================
+# This curated excerpt shows ONLY the Fedora Atomic + Determinate Nix + buildbox
+# entries expected after setup. Never commit raw host `ostree admin config-diff`
+# output to a public repo because it also lists Wi-Fi `.nmconnection` filenames,
+# `machine-id`, `nvme/hostnqn`, and `/etc/.git/objects/*`.
+# ==============================================================================
+
+A    cdi/nvidia.yaml
+A    ostree/prepare-root.conf
+A    profile.d/nix.sh
+A    sysctl.d/99-buildbox.conf
+A    systemd/system/determinate-nixd.socket
+A    systemd/system/ensure-symlinked-units-resolve.service
+A    systemd/system/multi-user.target.wants/nix-daemon.service
+A    systemd/system/multi-user.target.wants/nvidia-persistenced.service
+A    systemd/system/nix-daemon.service
+A    systemd/system/nix-daemon.socket
+A    systemd/system/nix-directory.service
+A    systemd/system/nix-directory.service.requires/nix-mkdir.service
+A    systemd/system/nix-mkdir.service
+A    systemd/system/nix.mount
+A    systemd/system/nix.mount.requires/nix-mkdir.service
+A    systemd/system/sockets.target.wants/determinate-nixd.socket
+A    systemd/system/sockets.target.wants/nix-daemon.socket
+A    systemd/zram-generator.conf.d/99-buildbox-zram.conf
+A    tmpfiles.d/nix-daemon.conf
+A    udev/rules.d/99-amd-pstate-epp.rules
+M    tuned/active_profile

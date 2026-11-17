@@ -1,0 +1,4 @@
+# /etc/udev/rules.d/99-amd-pstate-epp.rules
+# Requests maximum CPU boost responsiveness on Ryzen systems using `amd-pstate-epp`.
+# Safe no-op on CPUs/drivers that do not expose `energy_performance_preference`.
+SUBSYSTEM=="cpu", KERNEL=="cpu[0-9]*", ATTR{cpufreq/energy_performance_preference}="performance"

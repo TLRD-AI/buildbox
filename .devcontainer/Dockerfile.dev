@@ -1,0 +1,118 @@
+# ==============================================================================
+# Buildbox — Exemplar Option A Nix-Backed Devcontainer Image
+# ==============================================================================
+# Base: Debian 12 (Bookworm) Slim + Single-User Nix + direnv / nix-direnv
+# Stays synchronized with ../flake.nix and ../flake.lock across Linux, macOS,
+# rootless Podman, Docker Desktop, and GitHub Actions CI.
+# ==============================================================================
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8 \
+    PYTHON_JIT=1 \
+    PUPPETEER_SKIP_DOWNLOAD=1
+
+# Minimal base OS packages only: TLS roots, git, curl, locale support, fonts, and sudo
+# (All project compilers/SDKs come from flake.nix inside /nix/store)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    curl \
+    fontconfig \
+    fonts-dejavu-core \
+    fonts-liberation \
+    git \
+    locales \
+    openssh-client \
+    procps \
+    sudo \
+    xz-utils \
+    && sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create unprivileged UID/GID 1000 matching standard Linux/macOS host users
+# and Podman `--userns=keep-id` bind-mount ownership
+RUN groupadd -g 1000 appgroup \
+    && useradd -u 1000 -g appgroup -s /bin/bash -m appuser \
+    && echo "appuser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/appuser \
+    && chmod 0440 /etc/sudoers.d/appuser
+
+# Pre-create named-volume mountpoints and configure container-friendly Nix:
+# - sandbox = false / filter-syscalls = false: avoids nested user-namespace & seccomp
+#   failures inside unprivileged Docker/Podman containers
+# - build-users-group =: single-user Nix runs builds directly as appuser without nixbld
+RUN mkdir -p \
+        /etc/nix \
+        /nix \
+        /workspace \
+        /home/appuser/.cache/pub-cache \
+        /home/appuser/.cache/uv \
+        /home/appuser/.config/direnv \
+        /home/appuser/.local/bin \
+    && printf '%s\n' \
+        'experimental-features = nix-command flakes' \
+        'sandbox = false' \
+        'filter-syscalls = false' \
+        'build-users-group =' \
+        'max-jobs = auto' \
+        > /etc/nix/nix.conf \
+    && chown -R appuser:appgroup /nix /workspace /home/appuser
+
+USER appuser
+WORKDIR /workspace
+
+ENV USER=appuser \
+    HOME=/home/appuser \
+    PUB_CACHE=/home/appuser/.cache/pub-cache \
+    UV_CACHE_DIR=/home/appuser/.cache/uv \
+    NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    PATH="/home/appuser/.local/bin:/nix/var/nix/profiles/per-user/appuser/profile/bin:/home/appuser/.nix-profile/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    BASH_ENV=/home/appuser/.buildbox-bash-env
+
+# Install single-user Nix + direnv/nix-direnv into the base image layer so /nix/store
+# already contains Nix itself even before the named volume is hydrated by post-create.sh
+RUN curl --proto '=https' --tlsv1.2 -sSf -L https://nixos.org/nix/install -o /tmp/install-nix.sh \
+    && sh /tmp/install-nix.sh --no-daemon --yes \
+    && rm -f /tmp/install-nix.sh \
+    && . /home/appuser/.nix-profile/etc/profile.d/nix.sh \
+    && nix profile add nixpkgs#direnv nixpkgs#nix-direnv \
+    && nix store gc
+
+# Wire BASH_ENV + interactive bashrc so both `devcontainer exec bash -c ...`
+# (non-interactive) and interactive terminals automatically load the flake environment
+RUN git config --global --add safe.directory /workspace \
+    && printf '%s\n' \
+        'if [ -r /home/appuser/.nix-profile/share/nix-direnv/direnvrc ]; then' \
+        '    source /home/appuser/.nix-profile/share/nix-direnv/direnvrc' \
+        'elif [ -r /nix/var/nix/profiles/per-user/appuser/profile/share/nix-direnv/direnvrc ]; then' \
+        '    source /nix/var/nix/profiles/per-user/appuser/profile/share/nix-direnv/direnvrc' \
+        'fi' \
+        > /home/appuser/.config/direnv/direnvrc \
+    && printf '%s\n' \
+        'if [ -r /home/appuser/.nix-profile/etc/profile.d/nix.sh ]; then' \
+        '    . /home/appuser/.nix-profile/etc/profile.d/nix.sh' \
+        'elif [ -r /nix/var/nix/profiles/per-user/appuser/profile/etc/profile.d/nix.sh ]; then' \
+        '    . /nix/var/nix/profiles/per-user/appuser/profile/etc/profile.d/nix.sh' \
+        'fi' \
+        'if [ -z "${IN_NIX_SHELL:-}" ] && [ -z "${BUILDBOX_DEV_ENV_LOADED:-}" ] && [ -r /nix/var/nix/profiles/buildbox-dev-env.sh ]; then' \
+        '    export BUILDBOX_DEV_ENV_LOADED=1' \
+        '    . /nix/var/nix/profiles/buildbox-dev-env.sh' \
+        'fi' \
+        'export PATH="/home/appuser/.local/bin:${PATH}"' \
+        > /home/appuser/.buildbox-bash-env \
+    && printf '%s\n' \
+        'if [ -r /home/appuser/.buildbox-bash-env ]; then' \
+        '    . /home/appuser/.buildbox-bash-env' \
+        'fi' \
+        'case "$-" in' \
+        '    *i*) command -v direnv >/dev/null 2>&1 && eval "$(direnv hook bash)" ;;' \
+        'esac' \
+        >> /home/appuser/.bashrc \
+    && printf '%s\n' \
+        'if [ -r /home/appuser/.bashrc ]; then' \
+        '    . /home/appuser/.bashrc' \
+        'fi' \
+        > /home/appuser/.profile
