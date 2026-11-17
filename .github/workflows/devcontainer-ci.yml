@@ -27,6 +27,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Initialize host Compose override and .env before devcontainer build
+        run: bash .devcontainer/init-host.sh
+
       - name: Build, start, and verify Nix devcontainer
         uses: devcontainers/ci@v0.3
         with:
