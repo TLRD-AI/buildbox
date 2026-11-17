@@ -54,18 +54,20 @@ To keep `docker` and `docker compose` workflows working unmodified without a roo
 ## 5. Never Edit `/etc` In-Place — Use Modular Drop-Ins Checked Into Git
 
 Instead of hand-editing `/etc/sysctl.conf` or `/etc/systemd/zram-generator.conf`, modular drop-ins live in [`../host/etc/`](../host/etc/):
-- `sysctl.d/99-buildbox.conf` (`inotify` watches at 1M, `vm.swappiness=100` for `zstd` zram, `kernel.sched_autogroup_enabled=0`)
+- `sysctl.d/99-buildbox.conf` (`inotify` watches at 1M, `vm.swappiness=100` for `zstd` zram, `kernel.sched_autogroup_enabled=1` for responsive interactive desktop/browser scheduling)
 - `systemd/zram-generator.conf.d/99-buildbox-zram.conf` (`min(ram / 2, 16384)` `zstd` swap)
-- `udev/rules.d/99-amd-pstate-epp.rules` (`amd-pstate-epp` `performance`)
+- `systemd/journald.conf.d/99-buildbox-journal.conf` & `systemd/coredump.conf.d/99-buildbox-coredump.conf` (`250M` / `256M` caps on compact Btrfs roots)
+- `udev/rules.d/99-amd-pstate-epp.rules` (`amd-pstate-epp` `balance_performance` for cool idle + full single-core boost)
 - `ostree/prepare-root.conf` & `systemd/system/nix-mkdir.service` (Fedora Atomic `/nix` support)
+- `flatpak/com.google.Chrome/chrome-flags.conf` (Wayland Ozone, GPU rasterization, NVIDIA VA-API video decode)
 - `bashrc.d/99-buildbox-env.sh` (symlinked into `~/.bashrc.d/`)
 
 ---
 
 ## 6. Dual-Ledger `/etc` Auditing: `etckeeper` (`/etc/.git`) + Private `ostree admin config-diff`
 
-[`../host/apply_host_tuning.sh`](../host/apply_host_tuning.sh) bridges this repository and live `/etc` using `--status`, `--apply`, and `--rollback`:
+[`../host/apply_host_tuning.sh`](../host/apply_host_tuning.sh) bridges this repository and live `/etc` using `--status`, `--user-desktop`, `--apply`, and `--rollback`:
 1. **Pre-snapshot**: Initializes `/etc/.git` (or uses host `etckeeper`) with a `.gitignore` excluding secrets (`shadow*`, `ssh_host_*_key`, `pki/*/private/*`) and commits a pre-tuning snapshot.
-2. **Apply**: Installs the modular drop-ins into `/etc`, reloads `sysctl`/`udev`/`zram0`, switches `tuned-adm` to `throughput-performance`, enables Btrfs `compress=zstd:1` and NVIDIA persistence mode, and generates `/etc/cdi/nvidia.yaml` via `nixpkgs#nvidia-container-toolkit`.
+2. **Apply**: Installs the modular drop-ins into `/etc`, reloads `sysctl`/`udev`/`zram0`/`journald`, switches `tuned-adm` to `desktop` (or `throughput-performance` under `BUILDBOX_WORKLOAD=build`), enables Btrfs `compress=zstd:1` and NVIDIA persistence mode, generates `/etc/cdi/nvidia.yaml` via `nixpkgs#nvidia-container-toolkit`, and applies user `~/.bashrc.d` + Flatpak Chrome GPU flags.
 3. **Post-snapshot + Private Ostree diff**: Commits the post-tuning state to `/etc/.git` and writes `ostree admin config-diff` strictly to `$BUILDBOX_PRIVATE_DIR` (`../buildbox-private/hosts/<host>/ostree-etc-diff.txt` or gitignored `.local/state/ostree-etc-diff.txt`) so personal Wi-Fi SSIDs, machine IDs, and key filenames never touch the public repository.
 4. **One-command rollback**: `sudo bash host/apply_host_tuning.sh --rollback` deletes the drop-ins, restores the `balanced` CPU profile, and records a rollback commit in `/etc/.git`.

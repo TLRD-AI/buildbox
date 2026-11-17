@@ -1,4 +1,5 @@
 # /etc/udev/rules.d/99-amd-pstate-epp.rules
-# Requests maximum CPU boost responsiveness on Ryzen systems using `amd-pstate-epp`.
+# Balances low idle power/thermals with full boost responsiveness on Ryzen
+# systems using `amd-pstate-epp` (leaving headroom for Precision Boost 2).
 # Safe no-op on CPUs/drivers that do not expose `energy_performance_preference`.
-SUBSYSTEM=="cpu", KERNEL=="cpu[0-9]*", ATTR{cpufreq/energy_performance_preference}="performance"
+SUBSYSTEM=="cpu", KERNEL=="cpu[0-9]*", ATTR{cpufreq/energy_performance_preference}="balance_performance"
