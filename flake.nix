@@ -117,6 +117,11 @@
             binaryen
             jq
             shellcheck
+            ffmpeg
+            imagemagick
+            optipng
+            oxipng
+            cloc
             docker-client
             docker-compose
             docker-buildx
