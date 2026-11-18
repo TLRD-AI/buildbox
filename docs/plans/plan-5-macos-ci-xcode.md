@@ -1,6 +1,6 @@
 # Plan 5: Harden an 8 GB / 256 GB Apple M1 Mac mini as an Isolated Xcode & Multi-Repo CI Node
 
-**Goal:** Turn an **8 GB / 256 GB Apple M1 Mac mini** (`arm64` / `aarch64-darwin`, 4P + 4E cores) into a hardened, hybrid workstation + self-hosted Apple/Xcode CI node capable of building and testing multiple Apple repositories—using per-repo GitHub Actions self-hosted runners (restricted defensively as if every repo were public), Tailscale SSH for ad-hoc builds, an isolated non-admin `ci` user with its own `ci.keychain-db`, pinned `Xcode.app` + minimal iOS Simulator footprint, and clean Nix-vs-Xcode toolchain isolation.
+**Goal:** Turn an **8 GB / 256 GB Apple M1 Mac mini** (`arm64` / `aarch64-darwin`, 4P + 4E cores) into a hardened, hybrid workstation + self-hosted Apple/Xcode CI node dedicated strictly to building and testing Apple targets (**iOS → Safari → macOS**, never Linux/backend/Docker test suites)—using per-repo GitHub Actions self-hosted runners (restricted defensively as if every repo were public), Tailscale SSH for ad-hoc builds, an isolated non-admin `ci` user with its own `ci.keychain-db`, pinned `Xcode.app` + minimal iOS Simulator footprint, and clean Nix-vs-Xcode toolchain isolation.
 
 **Prerequisites:** Plan 4 Phases 0–2 completed (Determinate Nix `aarch64-darwin` + `direnv`/`nix-direnv` installed; Linux container VMs omitted/reclaimed on a 256 GB SSD).
 
@@ -356,10 +356,18 @@ jobs:
         with:
           clean: true
           persist-credentials: false
-      - name: Build & test (unsigned)
+      - name: Build iOS target (unsigned Simulator validation)
         run: |
           ci-xcode-exec xcodebuild build \
-            -scheme "<SCHEME>" \
+            -scheme "<IOS_SCHEME>" \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -jobs 4 -skipMacroValidation -skipPackagePluginValidation \
+            COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY=""
+      - name: Build Safari / macOS target (unsigned)
+        run: |
+          ci-xcode-exec xcodebuild build \
+            -scheme "<MACOS_OR_SAFARI_SCHEME>" \
             -destination "platform=macOS,arch=arm64" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             -jobs 4 -skipMacroValidation -skipPackagePluginValidation \
@@ -432,6 +440,7 @@ launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/local.ci.janitor.plist
 | Symptom / Error | Root Cause | Fix |
 | :--- | :--- | :--- |
 | `The Tailscale SSH server does not run in sandboxed Tailscale GUI builds` | Installed Mac App Store or GUI `Tailscale.app` | Uninstall GUI cask/app, `brew install tailscale`, `sudo brew services start tailscale`, `sudo tailscale up --ssh` |
+| `Connection closed by <lan-ip> port 22` on macOS `sshd` for `ci` | Standard non-admin user missing from macOS Remote Login ACL (`com.apple.access_ssh`) | Use Tailscale SSH (`ssh ci@<mac-ci-host>`), or on LAN run `sudo dseditgroup -o edit -a ci -t user com.apple.access_ssh` |
 | `xcodebuild` fails on wrong `SDKROOT` or unknown Clang flag | Run directly inside Nix `mkShell` | Use `pkgs.mkShellNoCC` on Darwin and wrap Xcode calls with `ci-xcode-exec` |
 | `codesign` hangs or throws `errSecInternalComponent` | Missing `set-key-partition-list`, locked keychain, or `LaunchDaemon` instead of `Aqua` `LaunchAgent` | Run runner via `./svc.sh` inside `ci`'s Aqua GUI session and run `security set-key-partition-list -S apple-tool:,apple:,codesign:` |
 | `CoreSimulatorService` connection error | Runner executing outside an Aqua GUI login session | Keep `ci` logged into an Aqua session (auto-login or Fast User Switching) |
