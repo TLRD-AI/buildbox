@@ -245,6 +245,32 @@ print_status() {
             echo "  Chrome NVD_BACKEND override   : unset"
         fi
     fi
+
+    echo ""
+    echo "[11] User Services & Remote Markdown Viewer (go-grip + Tailscale Serve):"
+    local go_grip_unit="${TARGET_HOME}/.config/systemd/user/go-grip.service"
+    if [ -L "${go_grip_unit}" ] || [ -f "${go_grip_unit}" ]; then
+        echo "  go-grip.service unit          : present (${go_grip_unit})"
+    else
+        echo "  go-grip.service unit          : not installed"
+    fi
+    if [ -x "${TARGET_HOME}/.nix-profile/bin/go-grip" ]; then
+        echo "  go-grip binary                : ${TARGET_HOME}/.nix-profile/bin/go-grip"
+    else
+        echo "  go-grip binary                : not installed (run: nix profile add github:chrishrb/go-grip)"
+    fi
+    if command -v systemctl &> /dev/null && [ "${EUID}" -ne 0 ]; then
+        local go_grip_state
+        go_grip_state="$(systemctl --user is-active go-grip.service 2>/dev/null || echo inactive)"
+        echo "  go-grip.service state         : ${go_grip_state}"
+    fi
+    if command -v tailscale &> /dev/null; then
+        if tailscale serve status 2>/dev/null | grep -q "proxy http://127.0.0.1:6419"; then
+            echo "  Tailscale Serve (6419)        : active (tailnet-only HTTPS)"
+        else
+            echo "  Tailscale Serve (6419)        : not configured"
+        fi
+    fi
 }
 
 require_root() {
@@ -331,6 +357,22 @@ apply_user_desktop_tuning() {
         fi
     else
         echo "  ℹ Flatpak com.google.Chrome not installed; skipping Chrome tuning"
+    fi
+
+    local go_grip_unit_src="${SCRIPT_DIR}/systemd/user/go-grip.service"
+    if [ -f "${go_grip_unit_src}" ]; then
+        run_as_target mkdir -p "${TARGET_HOME}/.config/systemd/user"
+        run_as_target ln -sfn "${go_grip_unit_src}" "${TARGET_HOME}/.config/systemd/user/go-grip.service"
+        echo "  ✔ Linked ${TARGET_HOME}/.config/systemd/user/go-grip.service"
+        if [ -x "${TARGET_HOME}/.nix-profile/bin/go-grip" ]; then
+            local target_uid
+            target_uid="$(id -u "${TARGET_USER}")"
+            run_as_target env XDG_RUNTIME_DIR="/run/user/${target_uid}" systemctl --user daemon-reload || true
+            run_as_target env XDG_RUNTIME_DIR="/run/user/${target_uid}" systemctl --user enable --now go-grip.service || true
+            echo "  ✔ Enabled and started user service go-grip.service (127.0.0.1:6419)"
+        else
+            echo "  ℹ go-grip not installed in Nix profile; install with: nix profile add github:chrishrb/go-grip"
+        fi
     fi
 }
 

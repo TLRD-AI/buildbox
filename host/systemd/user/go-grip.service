@@ -1,0 +1,13 @@
+[Unit]
+Description=go-grip Markdown viewer and directory browser (localhost / Tailscale Serve)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Documents/dev
+ExecStart=%h/.nix-profile/bin/go-grip -H 127.0.0.1 -p 6419 -b=false %h/Documents/dev
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

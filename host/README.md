@@ -16,6 +16,7 @@ This directory contains modular host-level configurations and the idempotent orc
 | [`etc/ostree/prepare-root.conf`](etc/ostree/prepare-root.conf) | `/etc/ostree/prepare-root.conf` | Enables `root.transient = true` alongside `composefs` so `/nix` can be created cleanly at boot on Fedora 41+ / 45 Atomic |
 | [`etc/systemd/system/nix-mkdir.service`](etc/systemd/system/nix-mkdir.service) | `/etc/systemd/system/nix-mkdir.service` | Creates `/nix` on transient root before `nix-directory.service` and `nix.mount`, avoiding `chattr -i /` errors under `composefs` |
 | [`flatpak/com.google.Chrome/chrome-flags.conf`](flatpak/com.google.Chrome/chrome-flags.conf) | `~/.var/app/com.google.Chrome/config/chrome-flags.conf` | Enables Wayland Ozone auto-detection, GPU rasterization, and Linux/NVIDIA VA-API hardware video decode (`NVD_BACKEND=direct` Flatpak override) |
+| [`systemd/user/go-grip.service`](systemd/user/go-grip.service) | `~/.config/systemd/user/go-grip.service` (symlink) | Runs `go-grip` on `127.0.0.1:6419` serving `~/Documents/dev` for local/Tailscale Serve directory browsing and live-reloading Markdown viewing |
 | [`bashrc.d/99-buildbox-env.sh`](bashrc.d/99-buildbox-env.sh) | `~/.bashrc.d/99-buildbox-env.sh` (symlink) | Exports `PYTHON_JIT=1`, `PUB_CACHE`, dynamic `DJANGO_TEST_PARALLEL`, and rootless `DOCKER_HOST` (`podman.sock`) |
 | [`ostree-etc-diff.example.txt`](ostree-etc-diff.example.txt) | Reference only (sanitized) | Redacted example of `ostree admin config-diff`; **never commit raw host `/etc` diffs to a public repo** |
 
@@ -55,3 +56,20 @@ sudo bash host/apply_host_tuning.sh --rollback
 ```
 
 > **Note on `/etc/ostree/prepare-root.conf` and `nix-mkdir.service`:** These two files affect initramfs/early boot for Determinate Nix on `composefs` systems and require `rpm-ostree initramfs-etc --track=/etc/ostree/prepare-root.conf --reboot`. Follow [`../docs/plans/plan-1-determinate-nix-installer.md`](../docs/plans/plan-1-determinate-nix-installer.md) to install them safely with pre/post `/etc/.git` snapshots.
+
+---
+
+## Remote Markdown Viewer (`go-grip` + Tailscale Serve)
+
+To browse `~/Documents/dev` and render Markdown files from a phone or tablet over Tailscale HTTPS without exposing any LAN ports:
+
+```bash
+# 1. Install go-grip (v0.11.0+ with folder listings and -H host binding) into your Nix profile
+nix profile add github:chrishrb/go-grip
+
+# 2. Symlink and enable ~/.config/systemd/user/go-grip.service (bound to 127.0.0.1:6419)
+bash host/apply_host_tuning.sh --user-desktop
+
+# 3. Expose privately over tailnet-only HTTPS (persists via tailscaled)
+tailscale serve --bg 6419
+```
